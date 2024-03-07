@@ -1,0 +1,132 @@
+;-------------------------
+; Title: Assignment #4
+;-------------------------
+; Purpose:
+; This program takes in a value for temprature and a value of measured
+; temprature, then decides wether to execute a command to cool or heat to match
+; the desired temperature if it is not already. This is done while also showing
+; values of the temperature in different registers in decimal values.
+; Dependencies: TempConfig.inc
+; Compiler: MPLAB X IDE v6.20: pic-as (v2.46)
+; Author: Alex Juarez
+; OUTPUTS: HEATER, COOLER
+; INPUTS: refTemp, measuredTemp
+; Version:
+;   V1.0: 03/03/2024 - First version
+;   V2.0: 03/06/2024 - Hex to Decimal conversion added
+;-------------------------
+    
+;----------------
+; Initialization
+;----------------
+#include "./TempConfig.inc"
+#include <xc.inc>
+    
+;----------------
+; PROGRAM INPUTS
+;----------------
+measuredTemp	equ 	0 ; this is the input value
+refTemp		equ 	15 ; this is the input value
+
+;----------------
+; REGISTERS
+;----------------
+refTempREG 	equ	20h ; this is the register for Reference temp 
+measuredTempREG equ	21h ; this is the register for measured temp
+contREG		equ	22h ; this is the register for contREG	
+		
+		
+;----------------
+; PROGRAM OUTPUTS
+;----------------
+	
+#define SWITCH	  LATD,2
+#define HEATER    PORTD,1
+#define COOLER	  PORTD,2
+	
+;----------------
+; Main Program
+;----------------
+
+    PSECT absdata,abs,ovrld
+	
+    ORG	    0
+    GOTO    _start
+	
+    ORG	    0020H
+    
+_start:   
+    MOVLW   0b11111001
+    MOVWF   TRISD, 0	    ;Set PORTD 1 and 2 as outputs
+    MOVLW   measuredTemp
+    MOVWF   measuredTempREG, 0	    ;Set register 10 as measured temperature value
+    MOVLW   refTemp
+    MOVWF   refTempREG, 0
+    
+    MOVLW   measuredTemp
+    CPFSEQ  refTempREG, 0   ;Compare measured with reference temperature
+    GOTO    _compare
+    MOVLW   0x00
+    MOVWF   contREG, 0      ;Set contREG as 0, indicating that the temperatures are matched, or equal.
+    
+_convert:
+    MOVFF   measuredTempREG, 0x32   ;Set register 32 with measuredTemp value
+    MOVFF   refTempREG, 0x31	    ;Set register 31 with refTemp value
+    MOVLW   0x00
+    MOVWF   0x30, 0		    ;Manually clear the 0x30 file
+    MOVLW   0x0A		    ;Set 0x0A in WREG to subtract by 0x0A
+
+_sub1:
+    INCF    0x30, 1, 0		    ;use register 30 as a counter
+    SUBWF   0x31, 1, 0		    ;Subtract 0x0A from register 31
+    BC	    _sub1		    ;Branch if STATUS carry bit is set, this would not skip if the value is negative
+    DECF    0x30, 1, 0		    ;Decrement the counter by one to appropriatly set the decimal value for the 10's place
+    MOVFF   0x30, 0x61		    ;Move the counter value into register 61
+    ADDWF   0x31, 1, 0		    ;Add 0x0A to register 31 to get the decimal value for the 1's place
+    MOVFF   0x31, 0x60		    ;Move register 31 value into register 60
+    CLRF    0x30, 0		    ;clear register 30 for measuredTemp conversion to decimal
+    
+;Repeat above process but now for measuredTemp and move the deciaml value between registers 70-72
+_sub2:
+    INCF    0x30, 1, 0
+    SUBWF   0x32, 1, 0
+    BC	    _sub2
+    DECF    0x30, 1, 0
+    MOVFF   0x30, 0x71
+    ADDWF   0x32, 1, 0
+    MOVFF   0x32, 0x70
+    CLRF    0x30, 0
+    
+    GOTO    _portd
+   
+;Compare refTemp with measuredTemp
+_compare:    
+    CPFSGT  refTempREG, 0
+    GOTO    _add2
+    CPFSLT  refTempREG, 0
+    GOTO    _add1
+    
+;Set contREG as 2, measured is greater than refTemp
+_add2:
+    MOVLW   0x00
+    ADDLW   0x02
+    MOVWF   contREG, 0
+    GOTO    _convert
+
+;Set contREG as 1, measured is less than refTemp
+_add1:
+    MOVLW   0x00
+    ADDLW   0x01
+    MOVWF   contREG, 0
+    GOTO    _convert
+    
+;check file value for contREG to set PORTD accordingly.
+_portd:
+    BTFSS   contREG, 0, 0
+    BSF	    PORTD, 2, 0
+    BTFSS   contREG, 1, 0
+    BSF	    PORTD, 1, 0
+    
+;End program
+_sleep:
+    SLEEP
