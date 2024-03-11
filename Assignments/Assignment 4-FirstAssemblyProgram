@@ -122,9 +122,9 @@ _add1:
     
 ;check file value for contREG to set PORTD accordingly.
 _portd:
-    BTFSS   contREG, 0, 0
+    BTFSC   contREG, 0, 0
     BSF	    PORTD, 2, 0
-    BTFSS   contREG, 1, 0
+    BTFSC   contREG, 1, 0
     BSF	    PORTD, 1, 0
     
 ;End program
