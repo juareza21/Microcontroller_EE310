@@ -1,0 +1,202 @@
+;-------------------------
+; Title: Counter
+;-------------------------
+; Purpose:
+; This program takes checks for two switches, switch A and switch B, and changes
+; the 7-segment display accordingly to which switch is pressed. When switch A is
+; pressed, the number displayed counts up, when switch B is pressed, the display
+; counts down, when both are pressed the counter resets to zero. When none are
+; pressed, then the counter doesn't change.
+; Dependencies: CounterConfigFile.inc
+; Compiler: MPLAB X IDE v6.20: pic-as (v2.46)
+; Author: Alex Juarez
+; OUTPUTS: PORTD
+; INPUTS: 
+; Version:
+;   V1.0: 03/22/2024 - First version
+;-------------------------
+
+
+;-------------------------
+;   Initialization
+;-------------------------
+#include "./CounterConfigFile.inc"
+#include <xc.inc>
+    
+;-------------------------
+; Program Inputs
+;------------------------- 
+    Inner_loop	EQU	1
+    Outer_loop  EQU	1
+    what_button	EQU	20H
+
+	
+;-------------------------
+; Main Program
+;-------------------------
+	
+    PSECT absdata,abs,ovrld
+    
+    ORG		0
+    GOTO	_setup
+    
+    ORG		20H
+    
+    
+_setup:
+    MOVLW   0xC0
+    MOVWF   0xA0
+    MOVLW   0xF9
+    MOVWF   0xA1
+    MOVLW   0xA4
+    MOVWF   0xA2
+    MOVLW   0xB0
+    MOVWF   0xA3
+    MOVLW   0x99
+    MOVWF   0xA4
+    MOVLW   0x92
+    MOVWF   0xA5
+    MOVLW   0x82
+    MOVWF   0xA6
+    MOVLW   0xF8
+    MOVWF   0xA7
+    MOVLW   0x80
+    MOVWF   0xA8
+    MOVLW   0x90
+    MOVWF   0xA9
+    MOVLW   0x88
+    MOVWF   0xAA
+    MOVLW   0x83
+    MOVWF   0xAB
+    MOVLW   0xC6
+    MOVWF   0xAC
+    MOVLW   0xA1
+    MOVWF   0xAD
+    MOVLW   0x86
+    MOVWF   0xAE
+    MOVLW   0x8E
+    MOVWF   0xAF
+    
+    clrf    what_button
+    clrf    WREG
+    RCALL   _setupPortD
+    RCALL   _setupPortB
+    clrf    PORTB
+    
+    CLRF    FSR0H
+    CLRF    FSR0L
+    
+    LFSR    0, 0xA0
+    MOVFF   INDF0, PORTD
+    
+_main:
+    RCALL   _check_switch
+    TSTFSZ  0x23
+    GOTO    _check23
+    
+_thedelay:
+    CLRF    FSR1H
+    CLRF    FSR1L
+    GOTO    CLR_LP1
+
+_check23:
+    BTFSS   0x23, 1
+    GOTO    _theinccount
+    BTFSS   0x23, 0
+    GOTO    _thedeccount
+    GOTO    _zerocount
+    
+CLR_LP1:
+    CALL    _loopDelay
+    SETF    POSTINC1
+    MOVLW   0x0F
+    SUBWF   FSR1H, W
+    BTFSS   FSR1L, 4
+    BRA	    CLR_LP1
+    
+    GOTO    _main
+    
+    
+_thedeccount:
+    MOVFF   FSR0, 0x25
+    MOVFF   0x24, WREG
+    LFSR    0, WREG
+    clrf    0x24
+
+    MOVFF   POSTDEC0, PORTD
+    BTFSS   FSR0, 5
+    LFSR    0, 0xAF
+    GOTO    _thedelay
+    
+_theinccount:
+    MOVFF   FSR0, 0x24
+    MOVFF   0x25, WREG
+    LFSR    0, WREG
+    clrf    0x25
+
+    MOVFF   POSTINC0, PORTD
+    BTFSC   FSR0, 4
+    LFSR    0, 0xA0
+    GOTO    _thedelay
+    
+_zerocount:
+    LFSR    0, 0xA0
+    MOVFF   INDF0, PORTD
+    GOTO    _thedelay
+    
+_setupPortD:
+    BANKSEL	PORTD ;
+    CLRF	PORTD ;Init PORTA
+    BANKSEL	LATD ;Data Latch
+    CLRF	LATD ;
+    BANKSEL	ANSELD ;
+    CLRF	ANSELD ;digital I/O
+    BANKSEL	TRISD ;
+    MOVLW	0b00000000 ;Set RD[7:1] as outputs
+    MOVWF	TRISD ;and set RD0 as ouput
+    RETURN
+
+_setupPortB:
+    BANKSEL	PORTB ;
+    CLRF	PORTB ;Init PORTB
+    BANKSEL	LATB ;Data Latch
+    CLRF	LATB ;
+    BANKSEL	ANSELB ;
+    CLRF	ANSELB ;digital I/O
+    BANKSEL	TRISB ;
+    MOVLW	0b11111111 ;
+    MOVWF	TRISB ;
+    RETURN
+    
+;--------Delay subroutine
+_loopDelay:
+    MOVLW   Inner_loop
+    MOVWF   0x21
+    MOVLW   Outer_loop
+    MOVWF   0x22
+_loop1:
+    DECF    0x21, 1
+    BNZ	    _loop1
+    MOVLW   Inner_loop	    ;Re-initialization of the Innerloop everytime the outer loop decrements
+    MOVWF   0x21
+    DECF    0x22, 1
+    BNZ	    _loop1
+    RETURN  1
+    
+    
+_check_switch:
+    clrf     0x23			; clears register 23
+    clrf    WREG			; clears WREG
+    
+    BTFSC   PORTB, 0			; checks if switch A has been pressed
+    MOVLW   1				; moves 00000010 into register 23, 
+    MOVWF   0x23
+    clrf    WREG
+    
+    BTFSC PORTB, 1			; checks if switch B has been pressed
+    MOVLW 2				; adds 00000001 to register 23 and keeps it in 23
+    ADDWF   0x23, 1
+
+return						
+
+    END
