@@ -118,10 +118,6 @@ CLR_LP1:
     
     
 _thedeccount:
-    MOVFF   FSR0, 0x25
-    MOVFF   0x24, WREG
-    LFSR    0, WREG
-    clrf    0x24
 
     MOVFF   POSTDEC0, PORTD
     BTFSS   FSR0, 5
@@ -129,10 +125,6 @@ _thedeccount:
     GOTO    _thedelay
     
 _theinccount:
-    MOVFF   FSR0, 0x24
-    MOVFF   0x25, WREG
-    LFSR    0, WREG
-    clrf    0x25
 
     MOVFF   POSTINC0, PORTD
     BTFSC   FSR0, 4
