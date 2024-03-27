@@ -11,9 +11,10 @@
 ; Compiler: MPLAB X IDE v6.20: pic-as (v2.46)
 ; Author: Alex Juarez
 ; OUTPUTS: PORTD
-; INPUTS: 
+; INPUTS: PORTB 0, PORTB 1
 ; Version:
 ;   V1.0: 03/22/2024 - First version
+;   V2.0: 03/26/2024 - Second version: Swicthed to using Table Pointers instead of FSR
 ;-------------------------
 
 
@@ -22,119 +23,126 @@
 ;-------------------------
 #include "./CounterConfigFile.inc"
 #include <xc.inc>
+
+PSECT absdata,abs,ovrld  
+;config statements should precede project file includes. 
     
-;-------------------------
+;---------------------
 ; Program Inputs
-;------------------------- 
-    Inner_loop	EQU	1
-    Outer_loop  EQU	1
-    what_button	EQU	20H
-
-	
-;-------------------------
+;---------------------
+ORG	    0X10
+#define	    Switch1	    PORTB,0
+#define	    Switch2	    PORTB,1
+    
+;---------------------
+; Programs Constants
+;---------------------
+R1 EQU 0x21	    ; Inner most Loop Counter for DELAY_SEC
+R2 EQU 0x22	    ; Inner Loop Counter for DELAY_SEC
+R3 EQU 0x23	    ; Outer Loop Counter for DELAY_SEC
+R4 EQU 0x24	    ; Main Loop Counter for DELAY_SEC
+D   EQU	0X01
+MAX	    EQU	    0X32
+MIN	    EQU	    0X33    
+	    
+;---------------------
 ; Main Program
-;-------------------------
-	
-    PSECT absdata,abs,ovrld
+;---------------------
+	    
+;--------Setup Ports and Table Pointers    
+    ORG	0x0
+    RCALL	_setupPortD
+    RCALL	_setupPortB
+	    
+    MOVLW   0XE0
+    MOVWF   TBLPTR,0
+    MOVLW   0XE0
+    MOVWF   MAX,0
+    MOVLW   0XF0
+    MOVWF   MIN,0
+    CALL    DATASET
+    CALL    RESET0
+	    
+	    
+CHECK:
+    BTFSC   Switch1
+    GOTO    CHECK1
+    BTFSC   Switch2
+    CALL    DECREASE
+    GOTO    CHECK
+  
+CHECK1:
+    BTFSS   Switch2
+    CALL    INCREASE
+    GOTO    RESET0
     
-    ORG		0
-    GOTO	_setup
+;--------Resets counter to "0"
+RESET0:
+    MOVLW   0X01
+    MOVWF   TBLPTRH
+    MOVLW   0XE0
+    MOVWF   TBLPTR,0
+    TBLRD*
+    MOVF    TABLAT,0,0
+    MOVFF   WREG,PORTD
+    GOTO    CHECK
     
-    ORG		20H
+;--------Loops back to set counter to "F"
+RESET1:
+    MOVLW   0XEF
+    MOVWF   TBLPTR,0
+    TBLRD*
+    MOVF    TABLAT,0,0
+    MOVFF   WREG,PORTD
+    GOTO    CHECK
     
+;--------Increases the counter
+INCREASE:
+    TBLRD+*
+    MOVF    TBLPTR,0,0
+    CALL    ROLLOVCNT	
+    TBLRD*
+    MOVFF   TABLAT,WREG
+    MOVFF   WREG,PORTD
+    CALL    DELAY
+    GOTO    CHECK
     
-_setup:
-    MOVLW   0xC0
-    MOVWF   0xA0
-    MOVLW   0xF9
-    MOVWF   0xA1
-    MOVLW   0xA4
-    MOVWF   0xA2
-    MOVLW   0xB0
-    MOVWF   0xA3
-    MOVLW   0x99
-    MOVWF   0xA4
-    MOVLW   0x92
-    MOVWF   0xA5
-    MOVLW   0x82
-    MOVWF   0xA6
-    MOVLW   0xF8
-    MOVWF   0xA7
-    MOVLW   0x80
-    MOVWF   0xA8
-    MOVLW   0x90
-    MOVWF   0xA9
-    MOVLW   0x88
-    MOVWF   0xAA
-    MOVLW   0x83
-    MOVWF   0xAB
-    MOVLW   0xC6
-    MOVWF   0xAC
-    MOVLW   0xA1
-    MOVWF   0xAD
-    MOVLW   0x86
-    MOVWF   0xAE
-    MOVLW   0x8E
-    MOVWF   0xAF
-    
-    clrf    what_button
-    clrf    WREG
-    RCALL   _setupPortD
-    RCALL   _setupPortB
-    clrf    PORTB
-    
-    CLRF    FSR0H
-    CLRF    FSR0L
-    
-    LFSR    0, 0xA0
-    MOVFF   INDF0, PORTD
-    
-_main:
-    RCALL   _check_switch
-    TSTFSZ  0x23
-    GOTO    _check23
-    
-_thedelay:
-    CLRF    FSR1H
-    CLRF    FSR1L
-    GOTO    CLR_LP1
+;--------Decreases the counter
+DECREASE:
+    MOVF    TBLPTR,0,0
+    CALL    ROLLOVCNT
+    TBLRD*-
+    TBLRD*
+    MOVF    TABLAT,0,0
+    MOVFF   WREG,PORTD
+    CALL    DELAY
+    GOTO    CHECK
 
-_check23:
-    BTFSS   0x23, 1
-    GOTO    _theinccount
-    BTFSS   0x23, 0
-    GOTO    _thedeccount
-    GOTO    _zerocount
-    
-CLR_LP1:
-    CALL    _loopDelay
-    SETF    POSTINC1
-    MOVLW   0x0F
-    SUBWF   FSR1H, W
-    BTFSS   FSR1L, 4
-    BRA	    CLR_LP1
-    
-    GOTO    _main
-    
-    
-_thedeccount:
-
-    MOVFF   POSTDEC0, PORTD
-    BTFSS   FSR0, 5
-    LFSR    0, 0xAF
-    GOTO    _thedelay
-    
-_theinccount:
-
-    MOVFF   POSTINC0, PORTD
-    BTFSC   FSR0, 4
-    LFSR    0, 0xA0
-    GOTO    _thedelay
-    
-_zerocount:
-    LFSR    0, 0xA0
-    MOVFF   INDF0, PORTD
-    GOTO    _thedelay
+;--------Subroutine to create the delay
+DELAY:	
+    MOVLW   0X01   
+    MOVWF   R4
+L_1:	; MAIN loop in the subroutine to generate a delay of R4 secs
+    MOVLW 1
+    MOVWF R3	
+L_2:	; outer loop generates a delay of 1 sec
+    MOVLW 1
+    MOVWF R2	
+L_3:	; inner loop generates a delay of 100 msecs
+    MOVLW 1
+    MOVWF R1
+L_4:	; inner most loop generates a delay of 1 msecs
+    NOP
+    NOP
+    DECF R1, F
+    BNZ L_4
+    DECF R2, F
+    BNZ L_3
+    DECF R3, F
+    BNZ L_2	
+    DECF R4, F
+    BNZ L_1	
+    RETURN
     
 _setupPortD:
     BANKSEL	PORTD ;
@@ -147,7 +155,7 @@ _setupPortD:
     MOVLW	0b00000000 ;Set RD[7:1] as outputs
     MOVWF	TRISD ;and set RD0 as ouput
     RETURN
-
+    
 _setupPortB:
     BANKSEL	PORTB ;
     CLRF	PORTB ;Init PORTB
@@ -159,36 +167,23 @@ _setupPortB:
     MOVLW	0b11111111 ;
     MOVWF	TRISB ;
     RETURN
-    
-;--------Delay subroutine
-_loopDelay:
-    MOVLW   Inner_loop
-    MOVWF   0x21
-    MOVLW   Outer_loop
-    MOVWF   0x22
-_loop1:
-    DECF    0x21, 1
-    BNZ	    _loop1
-    MOVLW   Inner_loop	    ;Re-initialization of the Innerloop everytime the outer loop decrements
-    MOVWF   0x21
-    DECF    0x22, 1
-    BNZ	    _loop1
-    RETURN  1
-    
-    
-_check_switch:
-    clrf     0x23			; clears register 23
-    clrf    WREG			; clears WREG
-    
-    BTFSC   PORTB, 0			; checks if switch A has been pressed
-    MOVLW   1				; moves 00000010 into register 23, 
-    MOVWF   0x23
-    clrf    WREG
-    
-    BTFSC PORTB, 1			; checks if switch B has been pressed
-    MOVLW 2				; adds 00000001 to register 23 and keeps it in 23
-    ADDWF   0x23, 1
 
-return						
-
-    END
+     
+ROLLOVCNT:  ; USE TO CHECK IF OV IS DETECTED 
+    MOVF    TBLPTR,1,0
+    SUBLW   0XE0
+    BZ	    RESET1
+    MOVF    TBLPTR,0,0
+    SUBLW   0XF0
+    BZ	    RESET0
+    MOVF    TBLPTR,1,0
+    RETURN
+    
+DATASET: ; SETS THE SEVEN SEGMENT DISPLAY OUTPUTS 
+    ORG	    0X1E0
+    DB	    0X3F, 0X06, 0X5B, 0X4F, 0X66, 0X6D, 0X7D, 0X07, 0X7F, 0X6F, 0x77, 0X7C, 0x39, 0x5E, 0x79, 0x71
+    
+    
+    RETURN   
+   
+END
