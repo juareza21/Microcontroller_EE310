@@ -12,8 +12,8 @@
 #define _XTAL_FREQ 4000000
 #define FCY     _XTAL_FREQ/4
 
-const char seg_code[] __at(0x100) = {0x3f, 0x06, 0x5B, 0x4F};
-int SECRET_CODE = 0x23;
+const char seg_code[] __at(0x100) = {0x3f, 0x06, 0x5B, 0x4F, 0x66};
+int SECRET_CODE = 0x32;
 int INPUT = 0;
 int count;
 int Submit = 0;
@@ -48,13 +48,15 @@ void check(void){
         if (Submit == 0)
         {
 
+//            PORTD = seg_code[count];
+//            __delay_ms(1000);
             PORTBbits.RB1 = 1;                  // Turns on input for PR1
             if(PORTBbits.RB2 == 1){
                 PORTD = seg_code[count];
                 count++;
                 __delay_ms(1000);
             }
-            if(count == 4)
+            if(count == 5)
                 count = 0;
         }
         
@@ -85,13 +87,15 @@ void check(void){
             PORTBbits.RB4 = 1;                  // Turn on input for PR2
             
             // Checks if the PR2 is set
+//            PORTD = seg_code[count];
+//            __delay_ms(1000);
             if (PORTBbits.RB3 == 1){
                 PORTD = seg_code[count];
                 count++;
                 __delay_ms(1000);
             }
             // Checks for overflow and resets to 0
-            if (count == 4)
+            if (count == 5)
                 count = 0;
         }
             
